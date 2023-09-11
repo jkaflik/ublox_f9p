@@ -3,6 +3,8 @@
 UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UBLOX_F9P_NODE_NAME, options) {
     debug = this->declare_parameter("debug", false);
     if (debug) {
+        RCLCPP_WARN(this->get_logger(), "Debugging enabled");
+
         if (rcutils_logging_set_logger_level(UBLOX_F9P_NODE_NAME, RCUTILS_LOG_SEVERITY_DEBUG) != RCUTILS_RET_OK) {
             RCLCPP_WARN(this->get_logger(), "Failed to set the debugging level");
         }
@@ -10,24 +12,22 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
 
     navsat_fix_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
 
-    if (this->declare_parameter("publish_imu", false)) {
-        imu_publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu", 10);
-    }
-
     this->rtcm_subscriber_ = this->create_subscription<rtcm_msgs::msg::Message>("/rtcm", 10,
                                                                                 std::bind(&UbloxF9PNode::rtcmCallback,
                                                                                           this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "UbloxF9PNode started");
     const std::string port = this->declare_parameter("port", "/dev/ttyACM0");
-    const int baudrate = this->declare_parameter("baudrate", 115200);
+    const int baudrate = this->declare_parameter("baudrate", 921600);
+
+    RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to " << port << " at " << baudrate << " baud");
+
     ublox_ = new UBlox();
     ublox_->setLogCallback(
             std::bind(&UbloxF9PNode::gpsLogCallback, this, std::placeholders::_1, std::placeholders::_2));
     ublox_->setGPSStateCallback(std::bind(&UbloxF9PNode::gpsStateCallback, this, std::placeholders::_1));
 
     ublox_->connect(port, baudrate);
-//    ublox_->setIMUCallback(std::bind(&UbloxF9PNode::imuCallback, this, std::placeholders::_1));
 }
 
 void UbloxF9PNode::gpsLogCallback(const std::string &msg, UBlox::LogLevel level) {
@@ -68,28 +68,10 @@ void UbloxF9PNode::gpsStateCallback(const UBlox::GPSState &state) {
 
     navsat_fix_publisher_->publish(msg);
 
+    gpsLogCallback("published valid GPS state", UBlox::LogLevel::DEBUG);
+
     // todo: handle the rest of GpsState values
 }
-
-//void UbloxF9PNode::imuCallback(const UBlox::IMUState &state) {
-//    if (imu_publisher_ == nullptr) {
-//        return;
-//    }
-//
-//    sensor_msgs::msg::Imu msg;
-//    msg.header.stamp = this->now();
-//    msg.header.frame_id = "gps";
-//    msg.header.seq++;
-//
-//    msg.angular_velocity.x = state.gx;
-//    msg.angular_velocity.y = state.gy;
-//    msg.angular_velocity.z = state.gz;
-//    msg.linear_acceleration.x = state.ax;
-//    msg.linear_acceleration.y = state.ay;
-//    msg.linear_acceleration.z = state.az;
-//
-//    imu_publisher_->publish(msg);
-//}
 
 void UbloxF9PNode::rtcmCallback(const rtcm_msgs::msg::Message::SharedPtr msg) {
     std::vector<uint8_t> data(&msg->message.data()[0], &msg->message.data()[msg->message.size()]);

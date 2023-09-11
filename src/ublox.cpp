@@ -37,20 +37,22 @@ public:
 };
 
 void *UBlox::Serial::rxThread(void) {
+    const int minBytesToRead = 6;
+
+    log_function_("Start receiving data from u-blox", INFO);
+
     auto headerAlreadyFound = false;
     std::chrono::time_point<std::chrono::steady_clock> packetReceivedTime;
 
-    int bytesNeeded = 6; // we need at least 6 bytes to parse the header
-
     Buffer buffer;
-    auto tempBuffer = Buffer(4096);
+    Buffer readBuffer(minBytesToRead); // we need at least 6 bytes to parse the header
 
     while (rx_thread_run_) {
-        auto bytesRead = serial_driver_->port()->receive(tempBuffer);
+        auto bytesRead = serial_driver_->port()->receive(readBuffer);
         buffer.reserve(buffer.size() + bytesRead);
-        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + bytesRead);
+        buffer.insert(buffer.end(), readBuffer.begin(), readBuffer.begin() + bytesRead);
 
-        if (bytesNeeded > 0 && 0 == bytesRead && !buffer.empty()) {
+        if (0 == bytesRead && !buffer.empty()) {
             log_function_("Possibly out-of-sync with u-blox. Read timeout in the middle of a frame.", WARN);
             continue;
         }
@@ -59,9 +61,10 @@ void *UBlox::Serial::rxThread(void) {
             continue;
         }
 
-        while (buffer.size() >= 6) {
+        while (buffer.size() >= minBytesToRead) {
             if (buffer[0] != 0x05 && buffer[1] != 0x62) {
-                buffer.erase(buffer.begin()); // remove first byte
+                log_function_("Invalid header. Skipping first byte.", DEBUG);
+                buffer.erase(buffer.begin());
                 continue;
             }
 
@@ -76,11 +79,10 @@ void *UBlox::Serial::rxThread(void) {
                 log_function_(
                         "Not enough data in buffer to parse packetData. Need " + std::to_string(totalLength) + " bytes, have " +
                         std::to_string(buffer.size()), DEBUG);
-                bytesNeeded = totalLength - buffer.size();
+                readBuffer.resize(totalLength - buffer.size());
                 break;
             }
-
-            bytesNeeded = totalLength;
+            readBuffer.resize(minBytesToRead);
 
             Buffer packetData;
             packetData.reserve(totalLength);
@@ -97,6 +99,8 @@ void *UBlox::Serial::rxThread(void) {
             receiveUbxPacket(packetReceivedTime, Buffer(packetData.begin() + 2, packetData.end() - 2));
         }
     }
+
+    log_function_("Stop receiving data from u-blox", INFO);
 }
 
 bool UBlox::Serial::validateChecksum(const Buffer &packet) {
@@ -126,6 +130,29 @@ void UBlox::Serial::receiveUbxPacket(std::chrono::time_point<std::chrono::steady
 
         case 0x10 << 8 | 0x02: {
             log_function_("received unsupported esf measurement message", DEBUG);
+        }
+            break;
+
+        case 0x02 << 8 | 0x32: {
+            if (data.size() != 8) {
+                log_function_("size mismatch for RTCM confirm message!", WARN);
+                break;
+            }
+
+            if (data[1] & 0b00000001) {
+                log_function_("RTCM CRC failed!", WARN);
+                break;
+            }
+
+            if (data[1] & 0b00000010) {
+                log_function_("RTCM message has been not used", WARN);
+                break;
+            }
+
+            if (data[1] & 0b00000100) {
+                log_function_("RTCM message accepted", DEBUG);
+                break;
+            }
         }
             break;
         default:
@@ -301,6 +328,8 @@ void UBlox::navPacketHandler(const std::chrono::time_point<std::chrono::steady_c
 }
 
 void UBlox::sendRTCM(const std::vector<uint8_t> &data) {
+    log_function_("Sending RTCM message", DEBUG);
+
     serial_->write(data);
 }
 

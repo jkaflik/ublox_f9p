@@ -21,14 +21,15 @@ The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbo
 
 - **:wrench: node diagnostic:** Update node diagnostic with more information about node state
 - **:wrench: publish raw data:** Publish raw data from the GPS
-- **:wrench: port IMU support:** Receives ESF-MEAS messages and builds sensor_msgs/Imu messages
-- **:wrench: port odometry feedback:** The driver is able to send odometry feedback to the F9R for the internal sensor fusion to
+- **:wrench: port IMU fusion:** The driver is able to send IMU feedback to the F9R for the internal sensor fusion to
+  work.
+- **:wrench: port odometry fusion:** The driver is able to send odometry feedback to the F9R for the internal sensor fusion to
   work.
 
 ## Parameters
 
 - **/port (string):** The serial port to use, defaults to /dev/ttyACM0
-- **/baudrate (int):** The baudrate to use, defaults to 115200
+- **/baudrate (int):** The baudrate to use, defaults to 921600
 
 ## Subscribed Topics:
 
