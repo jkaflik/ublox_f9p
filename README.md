@@ -23,25 +23,24 @@ The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbo
 ## TODO
 
 - **:wrench: node diagnostic:** Update node diagnostic with more information about node state
-- **:wrench: publish raw data:** Publish raw data from the GPS
-- **:wrench: port IMU fusion:** The driver is able to send IMU feedback to the F9R for the internal sensor fusion to
-  work.
-- **:wrench: port odometry fusion:** The driver is able to send odometry feedback to the F9R for the internal sensor fusion to
-  work.
+- **:wrench: publish raw data:** Publish optional raw data from the GPS
 
 ## Parameters
 
+- **/frame_id (string):** The frame id to use for the messages, defaults to "gps"
+- **/child_frame_id (string):** The child frame id to use for the messages, defaults to "gps_link"
 - **/port (string):** The serial port to use, defaults to /dev/ttyACM0
 - **/baudrate (int):** The baudrate to use, defaults to 921600
 - **/config (bool):** Enable F9P configuration via `UBX-CFG-VALSET` message, defaults to false. Required to be set to true to make configuration options below work.
   -  **/config.measurement_rate (uint16):** Nominal frequency between GNSS measurements, defaults to 5, maximum 40
   -  **/config.uart_output_rate (uint8):** Rate of UBX_NAV_PVT measurements to arrive at UART1, defaults to 5
+- **/publish.motion_odometry (bool):** Publish motion as odometry message, defaults to false
 
 ## Subscribed Topics:
 
 - **/rtcm (rtcm_msgs/Message)** RTCM which will be sent to the GPS
-- TODO: **/odometry (nav_msgs/Odometry) ** odometry messages which will be sent to the GPS for sensor fusion (e.g. F9R)
 
 ## Published Topics:
 
 - **/gps/fix (sensor_msgs/NavSatFix):** The GPS fix
+- **/gps/odom (nav_msgs/Odometry):** The GPS odometry that includes the velocity and heading (either motion or vehicle)

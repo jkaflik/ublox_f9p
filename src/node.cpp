@@ -1,5 +1,8 @@
 #include "node.hpp"
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UBLOX_F9P_NODE_NAME, options) {
     debug = this->declare_parameter<bool>("debug", false);
     if (debug) {
@@ -10,7 +13,14 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
         }
     }
 
+    frame_id_ = this->declare_parameter("frame_id", "gps");
+    child_frame_id_ = this->declare_parameter("child_frame_id", "base_link");
+
     navsat_fix_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
+
+    if (this->declare_parameter<bool>("publish.motion_odometry", false)) {
+        motion_odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("gps/odom", 10);
+    }
 
     this->rtcm_subscriber_ = this->create_subscription<rtcm_msgs::msg::Message>("/rtcm", 10,
                                                                                 std::bind(&UbloxF9PNode::rtcmCallback,
@@ -62,9 +72,16 @@ void UbloxF9PNode::gpsLogCallback(const std::string &msg, UBlox::LogLevel level)
 }
 
 void UbloxF9PNode::gpsStateCallback(const UBlox::GPSState &state) {
+    publishNavSatFix(state);
+    publishMotionOdom(state);
+
+    gpsLogCallback("published valid GPS state", UBlox::LogLevel::DEBUG);
+}
+
+void UbloxF9PNode::publishNavSatFix(const UBlox::GPSState &state) const {
     sensor_msgs::msg::NavSatFix msg;
     msg.header.stamp = this->now();
-    msg.header.frame_id = "gps";
+    msg.header.frame_id = frame_id_;
     msg.latitude = state.pos_lat;
     msg.longitude = state.pos_lon;
     msg.altitude = state.pos_altitude;
@@ -78,10 +95,34 @@ void UbloxF9PNode::gpsStateCallback(const UBlox::GPSState &state) {
     msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
 
     navsat_fix_publisher_->publish(msg);
+}
 
-    gpsLogCallback("published valid GPS state", UBlox::LogLevel::DEBUG);
+void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
+    if (!motion_odom_publisher_) {
+        return;
+    }
 
-    // todo: handle the rest of GpsState values
+    double heading = state.vehicle_heading_valid ? state.vehicle_heading : state.motion_heading;
+    double headingAcc = state.vehicle_heading_valid ? state.vehicle_heading_accuracy : state.motion_heading_accuracy;
+
+    nav_msgs::msg::Odometry msg;
+    msg.header.stamp = now();
+    msg.header.frame_id = child_frame_id_;
+    msg.twist.twist.linear.x = state.vel_n;
+    msg.twist.twist.linear.y = state.vel_e;
+    msg.twist.twist.linear.z = state.vel_u;
+
+    msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(0, 0, 1), heading));
+    msg.pose.covariance = {
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, pow(headingAcc, 2),
+    }; // todo: this is likely a bullshit covariance matrix
+
+    motion_odom_publisher_->publish(msg);
 }
 
 void UbloxF9PNode::rtcmCallback(const rtcm_msgs::msg::Message::SharedPtr msg) {

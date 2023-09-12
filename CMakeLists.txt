@@ -16,6 +16,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(serial_driver REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rtcm_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
@@ -38,6 +39,7 @@ ament_target_dependencies(ublox_f9p
         serial_driver
         std_msgs
         rtcm_msgs
+        nav_msgs
         tf2
         tf2_geometry_msgs
 )
