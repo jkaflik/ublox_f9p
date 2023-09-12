@@ -22,8 +22,8 @@ private:
 
     UBlox *ublox_;
 
-    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr navsat_fix_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_orientation_publisher_;
 
     rclcpp::Subscription<rtcm_msgs::msg::Message>::SharedPtr rtcm_subscriber_;
 
@@ -43,5 +43,6 @@ private:
      * @brief Callback for '/ntrip_client/rtcm' subscription to handle RTCM correction data
      */
     void rtcmCallback(const rtcm_msgs::msg::Message::SharedPtr msg);
+
 
 };

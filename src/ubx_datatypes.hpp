@@ -10,7 +10,7 @@
 #pragma pack(push, 1)
 
 // UBX-NAV-PVT message
-// see 5.14.11: https://cdn.sparkfun.com/assets/f/7/4/3/5/PM-15136.pdf
+// see 3.15.13: https://content.u-blox.com/sites/default/files/documents/u-blox-F9-HPG-1.32_InterfaceDescription_UBX-22008968.pdf
 struct UbxNavPvt {
     enum {
         CLASS_ID = 1u,
@@ -149,6 +149,28 @@ struct UbxNavPvt {
 
     // Magnetic declination accuracy (deg)
     uint16_t magAcc;
+} __attribute__((packed));
+
+// UBX-CFG-VALSET message header
+// see 3.10.26: https://content.u-blox.com/sites/default/files/u-blox8-M8_ReceiverDescrProtSpec_(UBX-13003221)_Public.pdf
+struct UbxCfgValSetHeader {
+    using SharedPtr = std::shared_ptr<UbxCfgValSetHeader>;
+    using ConstSharedPtr = std::shared_ptr<UbxCfgValSetHeader const>;
+
+    enum {
+        CLASS_ID = 0x06,
+        MESSAGE_ID = 0x8A,
+    };
+
+    enum {
+        LAYER_RAM = 0b00000001,
+        LAYER_BBR = 0b00000010,
+        LAYER_FLASH = 0b00000100,
+    };
+
+    uint8_t version = 0x00;
+    uint8_t layer;
+    uint16_t reserved;
 } __attribute__((packed));
 
 typedef std::shared_ptr<UbxNavPvt> UbxNavPvtPtr;

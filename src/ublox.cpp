@@ -34,7 +34,15 @@ public:
     bool data_updated_;
 
     void receiveUbxPacket(std::chrono::time_point<std::chrono::steady_clock> &point, Buffer data);
+
+    void calculateChecksum(const Buffer &packet, uint8_t &ck_a, uint8_t &ck_b) const;
 };
+
+void sendPacket(uint8_t messageClass, uint8_t messageID, const std::vector<uint8_t> &packet);
+
+void setConfig(UBlox::ConfigSet set);
+
+void setConfig(UBlox::ConfigSet set);
 
 void *UBlox::Serial::rxThread(void) {
     const int minBytesToRead = 6;
@@ -104,12 +112,19 @@ void *UBlox::Serial::rxThread(void) {
 }
 
 bool UBlox::Serial::validateChecksum(const Buffer &packet) {
-    uint8_t ck_a = 0, ck_b = 0;
+    uint8_t ck_a;
+    uint8_t ck_b;
+    calculateChecksum(packet, ck_a, ck_b);
+    return ck_a == packet[packet.size() - 2] && ck_b == packet[packet.size() - 1];
+}
+
+void UBlox::Serial::calculateChecksum(const UBlox::Serial::Buffer &packet, uint8_t &ck_a, uint8_t &ck_b) const {
+    ck_a= 0;
+    ck_b= 0;
     for (auto iter = packet.begin() + 2; iter != packet.end() - 2; ++iter) {
         ck_a += *iter;
         ck_b += ck_a;
     }
-    return ck_a == packet[packet.size() - 2] && ck_b == packet[packet.size() - 1];
 }
 
 void UBlox::Serial::receiveUbxPacket(std::chrono::time_point<std::chrono::steady_clock> &point, Buffer data) {
@@ -133,26 +148,12 @@ void UBlox::Serial::receiveUbxPacket(std::chrono::time_point<std::chrono::steady
         }
             break;
 
-        case 0x02 << 8 | 0x32: {
-            if (data.size() != 8) {
-                log_function_("size mismatch for RTCM confirm message!", WARN);
-                break;
-            }
-
-            if (data[1] & 0b00000001) {
-                log_function_("RTCM CRC failed!", WARN);
-                break;
-            }
-
-            if (data[1] & 0b00000010) {
-                log_function_("RTCM message has been not used", WARN);
-                break;
-            }
-
-            if (data[1] & 0b00000100) {
-                log_function_("RTCM message accepted", DEBUG);
-                break;
-            }
+        case 0x05 << 8 | 0x01: {
+            log_function_("received UBX-ACK-ACK", DEBUG);
+        }
+            break;
+        case 0x05 << 8 | 0x00: {
+            log_function_("received UBX-ACK-NAK", DEBUG);
         }
             break;
         default:
@@ -339,4 +340,63 @@ void UBlox::setGPSStateCallback(const UBlox::GPSStateHandlerFunction &handler) {
 
 void UBlox::setLogCallback(const UBlox::LogFunction &handler) {
     log_function_ = handler;
+}
+
+void UBlox::sendPacket(uint8_t messageClass, uint8_t messageID, const std::vector<uint8_t> &payload) {
+    // build UBX frame
+    std::vector<uint8_t> buffer(payload.size() + 8); // 8 bytes for header and footer
+
+    // sync chars
+    buffer[0] = 0xB5;
+    buffer[1] = 0x62;
+    // message
+    buffer[2] = messageClass;
+    buffer[3] = messageID;
+    // 2 byte length
+    buffer[4] = payload.size() & 0xFF;
+    buffer[5] = (payload.size() >> 8) & 0xFF;
+
+    std::copy(payload.begin(), payload.end(), buffer.begin() + 6);
+
+    serial_->calculateChecksum(buffer, buffer[buffer.size() - 2], buffer[buffer.size() - 1]);
+
+    return serial_->write(buffer);
+}
+
+void UBlox::ConfigSet::set(uint32_t keyID, uint16_t value) {
+    appendKeyID(keyID);
+
+    data_.push_back(value & 0xFF);
+    data_.push_back((value >> 8) & 0xFF);
+}
+
+void UBlox::ConfigSet::set(uint32_t keyID, uint8_t value) {
+    appendKeyID(keyID);
+
+    data_.push_back(value);
+}
+
+void UBlox::ConfigSet::appendKeyID(uint32_t keyID) {
+    data_.push_back(keyID & 0xFF);
+    data_.push_back((keyID >> 8) & 0xFF);
+    data_.push_back((keyID >> 16) & 0xFF);
+    data_.push_back((keyID >> 24) & 0xFF);
+}
+
+
+void UBlox::setConfig(UBlox::ConfigSet set) {
+    if (set.data_.size() == 0) {
+        log_function_("Attempt to configure with no values", WARN);
+        return;
+    }
+
+    UbxCfgValSetHeader header = {
+            .layer = UbxCfgValSetHeader::LAYER_RAM,
+    };
+
+    std::vector<uint8_t> payload(sizeof(header) + set.data_.size());
+    std::copy((uint8_t *) &header, (uint8_t *) &header + sizeof(header), payload.begin());
+    std::copy(set.data_.begin(), set.data_.end(), payload.begin() + sizeof(header));
+
+    sendPacket(UbxCfgValSetHeader::CLASS_ID, UbxCfgValSetHeader::MESSAGE_ID, payload);
 }

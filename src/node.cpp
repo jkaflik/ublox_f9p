@@ -1,7 +1,7 @@
 #include "node.hpp"
 
 UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UBLOX_F9P_NODE_NAME, options) {
-    debug = this->declare_parameter("debug", false);
+    debug = this->declare_parameter<bool>("debug", false);
     if (debug) {
         RCLCPP_WARN(this->get_logger(), "Debugging enabled");
 
@@ -26,8 +26,19 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
     ublox_->setLogCallback(
             std::bind(&UbloxF9PNode::gpsLogCallback, this, std::placeholders::_1, std::placeholders::_2));
     ublox_->setGPSStateCallback(std::bind(&UbloxF9PNode::gpsStateCallback, this, std::placeholders::_1));
-
     ublox_->connect(port, baudrate);
+
+    if (this->declare_parameter<bool>("config.enable", false) == true) {
+        uint16_t rate_meas = 1000 / this->declare_parameter<uint16_t>("config.measurement_rate", 5);
+        uint8_t nav_pvt_uart1 = this->declare_parameter<uint8_t>("config.uart_output_rate", 5);
+
+        UBlox::ConfigSet set;
+        set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
+        set.set(UBlox::ConfigSet::Key::CFG_MSGOUT_UBX_NAV_PVT_UART1, nav_pvt_uart1);
+        ublox_->setConfig(set);
+
+        RCLCPP_INFO_STREAM(this->get_logger(), "Configured UBlox F9P with measurement rate " << rate_meas << "ms and UART1 output rate " << nav_pvt_uart1 << "Hz");
+    }
 }
 
 void UbloxF9PNode::gpsLogCallback(const std::string &msg, UBlox::LogLevel level) {

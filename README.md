@@ -1,6 +1,9 @@
 # u-blox F9P driver for ROS2
 
-Driver focused on supporting single u-blox chip with purpose of using the internal sensor fusion.
+Driver focused on supporting single u-blox ZED-F9P (no sensor fusion) chip.
+Currently, this driver supports `UBX-NAV-PVT` (navigation, position, velocity, time solution) protocol message.
+It requires u-blox configuration to be done beforehand. The configuration can be done using the [OpenMower instructions](https://openmower.de/docs/robot-assembly/prepare-the-parts/prepare-the-gps/).
+Tested only against FW version `1.32`.
 
 The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbot_driver_gps/) originally used in the [OpenMower](https://openmower.de/) project.
 
@@ -30,6 +33,9 @@ The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbo
 
 - **/port (string):** The serial port to use, defaults to /dev/ttyACM0
 - **/baudrate (int):** The baudrate to use, defaults to 921600
+- **/config (bool):** Enable F9P configuration via `UBX-CFG-VALSET` message, defaults to false. Required to be set to true to make configuration options below work.
+  -  **/config.measurement_rate (uint16):** Nominal frequency between GNSS measurements, defaults to 5, maximum 40
+  -  **/config.uart_output_rate (uint8):** Rate of UBX_NAV_PVT measurements to arrive at UART1, defaults to 5
 
 ## Subscribed Topics:
 

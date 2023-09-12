@@ -62,18 +62,22 @@ public:
         RTKType rtk_type;
     };
 
-//    struct IMUState {
-//        uint32_t sensor_time;
-//        uint32_t received_time;
-//
-//        // acceleration in m/s
-//        double ax,ay,az;
-//        // rotation in rad/s
-//        double gx,gy,gz;
-//    };
+    class ConfigSet {
+    public:
+        enum Key {
+            CFG_RATE_MEAS = 0x30210001, // uint16, seconds, scaled to 10ms
+            CFG_MSGOUT_UBX_NAV_PVT_UART1 = 0x20910007, // uint8, messages per second
+        };
+
+        void set(const uint32_t keyID, const uint16_t value);
+        void set(const uint32_t keyID, const uint8_t value);
+
+        std::vector<uint8_t> data_;
+    private:
+        void appendKeyID(const uint32_t keyID);
+    };
 
     typedef std::function<void(const GPSState&)> GPSStateHandlerFunction;
-//    typedef std::function<void(const IMUState&)> IMUStateHandlerFunction;
     typedef std::function<void(const std::string&, LogLevel level)> LogFunction;
 
     UBlox();
@@ -89,7 +93,11 @@ public:
 
     bool isConnected() const;
 
+    void sendPacket(uint8_t messageClass, uint8_t messageID, const std::vector<uint8_t> &payload);
+
     void sendRTCM(const std::vector<uint8_t>& data);
+
+    void setConfig(UBlox::ConfigSet set);
 
 private:
     typedef std::function<void(const std::chrono::time_point<std::chrono::steady_clock>&, const UbxNavPvtConstPtr&)> NavPacketHandlerFunction;
