@@ -105,15 +105,18 @@ void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
     double heading = state.vehicle_heading_valid ? state.vehicle_heading : state.motion_heading;
     double headingAcc = state.vehicle_heading_valid ? state.vehicle_heading_accuracy : state.motion_heading_accuracy;
 
+    auto covSpeed = pow(state.vel_accuracy, 2);
+
     nav_msgs::msg::Odometry msg;
     msg.header.stamp = now();
     msg.header.frame_id = child_frame_id_;
-    msg.twist.twist.linear.x = state.vel_n;
-    msg.twist.twist.linear.y = state.vel_e;
+    msg.twist.twist.linear.x = state.vel_e;
+    msg.twist.twist.linear.y = state.vel_n;
     msg.twist.twist.linear.z = state.vel_u;
-    msg.twist.covariance[0] = 0.1;
-    msg.twist.covariance[7] = 0.1;
-    msg.twist.covariance[14] = 0.1;
+    msg.twist.covariance[0] = covSpeed;
+    msg.twist.covariance[7] = covSpeed;
+    msg.twist.covariance[14] = covSpeed;
+    msg.twist.covariance[35] = -1;
 
     msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(0, 0, 1), heading));
     msg.pose.covariance = {

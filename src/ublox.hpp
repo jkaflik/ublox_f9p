@@ -47,7 +47,7 @@ public:
 
         // Motion
         bool motion_heading_valid;
-        double vel_e, vel_n, vel_u;
+        double vel_e, vel_n, vel_u, vel_accuracy;
         double motion_heading_accuracy;
         double motion_heading;
 

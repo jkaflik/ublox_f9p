@@ -284,6 +284,7 @@ void UBlox::navPacketHandler(const std::chrono::time_point<std::chrono::steady_c
     gpsState.vel_n = packet->velN / 1000.0;
     gpsState.vel_u = -packet->velD / 1000.0;
 
+    gpsState.vel_accuracy = packet->sAcc / 1000.0;
 
     double headAcc = (packet->headAcc / 100000.0) * (M_PI / 180.0);
 
