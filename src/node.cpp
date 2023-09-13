@@ -111,6 +111,9 @@ void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
     msg.twist.twist.linear.x = state.vel_n;
     msg.twist.twist.linear.y = state.vel_e;
     msg.twist.twist.linear.z = state.vel_u;
+    msg.twist.covariance[0] = 0.1;
+    msg.twist.covariance[7] = 0.1;
+    msg.twist.covariance[14] = 0.1;
 
     msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(0, 0, 1), heading));
     msg.pose.covariance = {
@@ -120,7 +123,7 @@ void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, pow(headingAcc, 2),
-    }; // todo: this is likely a bullshit covariance matrix
+    };
 
     motion_odom_publisher_->publish(msg);
 }
