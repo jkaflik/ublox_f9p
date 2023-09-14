@@ -34,7 +34,6 @@ The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbo
 - **/config (bool):** Enable F9P configuration via `UBX-CFG-VALSET` message, defaults to false. Required to be set to true to make configuration options below work.
   -  **/config.measurement_rate (uint16):** Nominal frequency between GNSS measurements, defaults to 5, maximum 40
   -  **/config.uart_output_rate (uint8):** Rate of UBX_NAV_PVT measurements to arrive at UART1, defaults to 5
-- **/publish.motion_odometry (bool):** Publish motion as odometry message, defaults to false
 
 ## Subscribed Topics:
 

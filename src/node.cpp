@@ -17,10 +17,7 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
     child_frame_id_ = this->declare_parameter("child_frame_id", "base_link");
 
     navsat_fix_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
-
-    if (this->declare_parameter<bool>("publish.motion_odometry", false)) {
-        motion_odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("gps/odom", 10);
-    }
+    motion_odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("gps/odom", 10);
 
     this->rtcm_subscriber_ = this->create_subscription<rtcm_msgs::msg::Message>("/rtcm", 10,
                                                                                 std::bind(&UbloxF9PNode::rtcmCallback,
@@ -103,10 +100,6 @@ void UbloxF9PNode::publishNavSatFix(const UBlox::GPSState &state) const {
 }
 
 void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
-    if (!motion_odom_publisher_) {
-        return;
-    }
-
     double heading = state.vehicle_heading_valid ? state.vehicle_heading : state.motion_heading;
     double headingAcc = state.vehicle_heading_valid ? state.vehicle_heading_accuracy : state.motion_heading_accuracy;
 
@@ -115,6 +108,7 @@ void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
     nav_msgs::msg::Odometry msg;
     msg.header.stamp = now();
     msg.header.frame_id = child_frame_id_;
+    msg.child_frame_id = child_frame_id_;
     msg.twist.twist.linear.x = state.vel_e;
     msg.twist.twist.linear.y = state.vel_n;
     msg.twist.twist.linear.z = state.vel_u;
