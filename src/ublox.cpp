@@ -149,11 +149,11 @@ void UBlox::Serial::receiveUbxPacket(std::chrono::time_point<std::chrono::steady
             break;
 
         case 0x05 << 8 | 0x01: {
-            log_function_("received UBX-ACK-ACK", DEBUG);
+            log_function_("received UBX-ACK-ACK", INFO);
         }
             break;
         case 0x05 << 8 | 0x00: {
-            log_function_("received UBX-ACK-NAK", DEBUG);
+            log_function_("received UBX-ACK-NAK", INFO);
         }
             break;
         default:

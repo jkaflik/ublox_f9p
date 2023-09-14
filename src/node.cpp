@@ -43,9 +43,14 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
         uint8_t nav_pvt_uart1 = this->declare_parameter<uint8_t>("config.uart_output_rate", 5);
 
         UBlox::ConfigSet set;
-        set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
+//        set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
         set.set(UBlox::ConfigSet::Key::CFG_MSGOUT_UBX_NAV_PVT_UART1, nav_pvt_uart1);
         ublox_->setConfig(set);
+
+//        auto msg = UbxCfgMsgRate{nav_pvt_uart1};
+//        std::vector<uint8_t> payload(reinterpret_cast<uint8_t *>(&msg), reinterpret_cast<uint8_t *>(&msg) + sizeof(msg));
+//
+//        ublox_->sendPacket(UbxCfgMsgRate::CLASS_ID, UbxCfgMsgRate::MESSAGE_ID, payload);
 
         RCLCPP_INFO_STREAM(this->get_logger(), "Configured UBlox F9P with measurement rate " << rate_meas << "ms and UART1 output rate " << nav_pvt_uart1 << "Hz");
     }

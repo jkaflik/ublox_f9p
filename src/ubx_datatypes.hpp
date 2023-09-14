@@ -151,8 +151,17 @@ struct UbxNavPvt {
     uint16_t magAcc;
 } __attribute__((packed));
 
+struct UbxCfgMsgRate {
+    enum {
+        CLASS_ID = 0x06,
+        MESSAGE_ID = 0x01,
+    };
+
+    uint8_t rate;
+};
+
 // UBX-CFG-VALSET message header
-// see 3.10.26: https://content.u-blox.com/sites/default/files/u-blox8-M8_ReceiverDescrProtSpec_(UBX-13003221)_Public.pdf
+// see 3.10.26: pdf
 struct UbxCfgValSetHeader {
     using SharedPtr = std::shared_ptr<UbxCfgValSetHeader>;
     using ConstSharedPtr = std::shared_ptr<UbxCfgValSetHeader const>;
