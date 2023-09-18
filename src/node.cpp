@@ -14,7 +14,7 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
     }
 
     frame_id_ = this->declare_parameter("frame_id", "gps");
-    child_frame_id_ = this->declare_parameter("child_frame_id", "base_link");
+    world_frame_id = this->declare_parameter("world_frame", "map");
 
     navsat_fix_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
     motion_odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("gps/odom", 10);
@@ -40,14 +40,9 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
         uint8_t nav_pvt_uart1 = this->declare_parameter<uint8_t>("config.uart_output_rate", 5);
 
         UBlox::ConfigSet set;
-//        set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
+        set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
         set.set(UBlox::ConfigSet::Key::CFG_MSGOUT_UBX_NAV_PVT_UART1, nav_pvt_uart1);
         ublox_->setConfig(set);
-
-//        auto msg = UbxCfgMsgRate{nav_pvt_uart1};
-//        std::vector<uint8_t> payload(reinterpret_cast<uint8_t *>(&msg), reinterpret_cast<uint8_t *>(&msg) + sizeof(msg));
-//
-//        ublox_->sendPacket(UbxCfgMsgRate::CLASS_ID, UbxCfgMsgRate::MESSAGE_ID, payload);
 
         RCLCPP_INFO_STREAM(this->get_logger(), "Configured UBlox F9P with measurement rate " << rate_meas << "ms and UART1 output rate " << nav_pvt_uart1 << "Hz");
     }
@@ -93,8 +88,17 @@ void UbloxF9PNode::publishNavSatFix(const UBlox::GPSState &state) const {
             0.0, 0.0, pow(state.position_accuracy, 2)
     };
     msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
-    msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
     msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
+
+    switch (state.fix_type) {
+        case UBlox::GPSState::FixType::FIX_2D:
+        case UBlox::GPSState::FixType::FIX_3D:
+            msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+            break;
+        default:
+            msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+            break;
+    }
 
     navsat_fix_publisher_->publish(msg);
 }
@@ -107,8 +111,8 @@ void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
 
     nav_msgs::msg::Odometry msg;
     msg.header.stamp = now();
-    msg.header.frame_id = child_frame_id_;
-    msg.child_frame_id = child_frame_id_;
+    msg.header.frame_id = world_frame_id;
+    msg.child_frame_id = frame_id_;
     msg.twist.twist.linear.x = state.vel_e;
     msg.twist.twist.linear.y = state.vel_n;
     msg.twist.twist.linear.z = state.vel_u;

@@ -23,7 +23,7 @@ private:
     UBlox *ublox_;
 
     std::string frame_id_;
-    std::string child_frame_id_;
+    std::string world_frame_id;
 
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr navsat_fix_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr motion_odom_publisher_;
