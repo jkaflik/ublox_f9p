@@ -31,6 +31,13 @@ add_executable(ublox_f9p
         src/ublox.cpp
 )
 
+# Since version 3.6.0 robot_localization uses a GeographicLib, so it has to be linked to the library as well
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib/")
+find_package(GeographicLib REQUIRED)
+target_link_libraries(ublox_f9p
+        ${GeographicLib_LIBRARIES}
+)
+
 ament_target_dependencies(ublox_f9p
         geometry_msgs
         rclcpp
