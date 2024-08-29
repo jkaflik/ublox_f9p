@@ -9,6 +9,7 @@
   <url type="website">https://github.com/jkaflik/ublox_f9p</url>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <buildtool_depend>asio_cmake_module</buildtool_depend>
 
   <depend>diagnostic_msgs</depend>
   <depend>diagnostic_updater</depend>
