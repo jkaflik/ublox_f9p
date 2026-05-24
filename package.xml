@@ -13,9 +13,9 @@
 
   <depend>diagnostic_msgs</depend>
   <depend>diagnostic_updater</depend>
+  <depend>geographiclib</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
-  <build_depend>robot_localization</build_depend>
   <depend>rtcm_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
