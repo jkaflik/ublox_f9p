@@ -11,7 +11,6 @@ find_package(ament_cmake_auto REQUIRED)
 
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(robot_localization REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(serial_driver REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -19,6 +18,9 @@ find_package(rtcm_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib/")
+find_package(GeographicLib REQUIRED)
 
 include_directories(include)
 
@@ -31,9 +33,6 @@ add_executable(ublox_f9p
         src/ublox.cpp
 )
 
-# Since version 3.6.0 robot_localization uses a GeographicLib, so it has to be linked to the library as well
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib/")
-find_package(GeographicLib REQUIRED)
 target_link_libraries(ublox_f9p
         ${GeographicLib_LIBRARIES}
 )
@@ -41,7 +40,6 @@ target_link_libraries(ublox_f9p
 ament_target_dependencies(ublox_f9p
         geometry_msgs
         rclcpp
-        robot_localization
         sensor_msgs
         serial_driver
         std_msgs

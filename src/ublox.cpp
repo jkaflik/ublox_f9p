@@ -1,8 +1,13 @@
 #include <serial_driver/serial_driver.hpp>
 #include <pthread.h>
-#include <robot_localization/navsat_conversions.hpp>
-
+#include <GeographicLib/UTMUPS.hpp>
+#include <cmath>
 #include "ublox.hpp"
+
+namespace {
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kHalfPi = kPi / 2.0;
+}
 
 class UBlox::Serial {
 public:
@@ -268,17 +273,19 @@ void UBlox::navPacketHandler(const std::chrono::time_point<std::chrono::steady_c
     double lat = (double) packet->lat / 10000000.0;
     double lon = (double) packet->lon / 10000000.0;
     double altitude = (double) packet->height / 1000.0;
-    double e, n;
-    std::string zone;
-    robot_localization::navsat_conversions::LLtoUTM(lat, lon, n, e, zone);
+    double easting, northing;
+    int zone;
+    bool northp;
+    GeographicLib::UTMUPS::Forward(lat, lon, zone, northp, easting, northing);
     gpsState.pos_lat = lat;
     gpsState.pos_lon = lon;
     gpsState.pos_altitude = altitude;
     gpsState.position_valid = true;
-    gpsState.pos_e = e;
-    gpsState.pos_n = n;
-    gpsState.position_accuracy = (double) sqrt(
-            pow((double) packet->hAcc / 1000.0, 2) + pow((double) packet->vAcc / 1000.0, 2));
+    gpsState.pos_e = easting;
+    gpsState.pos_n = northing;
+    gpsState.pos_u = altitude;
+    gpsState.position_accuracy = (double) std::sqrt(
+            std::pow((double) packet->hAcc / 1000.0, 2) + std::pow((double) packet->vAcc / 1000.0, 2));
 
     gpsState.vel_e = packet->velE / 1000.0;
     gpsState.vel_n = packet->velN / 1000.0;
@@ -286,20 +293,20 @@ void UBlox::navPacketHandler(const std::chrono::time_point<std::chrono::steady_c
 
     gpsState.vel_accuracy = packet->sAcc / 1000.0;
 
-    double headAcc = (packet->headAcc / 100000.0) * (M_PI / 180.0);
+    double headAcc = (packet->headAcc / 100000.0) * (kPi / 180.0);
 
     double hedVeh = packet->headVeh / 100000.0;
-    hedVeh = -hedVeh * (M_PI / 180.0);
-    hedVeh = fmod(hedVeh + (M_PI_2), 2.0 * M_PI);
+    hedVeh = -hedVeh * (kPi / 180.0);
+    hedVeh = std::fmod(hedVeh + kHalfPi, 2.0 * kPi);
     while (hedVeh < 0) {
-        hedVeh += M_PI * 2.0;
+        hedVeh += kPi * 2.0;
     }
 
     double headMotion = packet->headMot / 100000.0;
-    headMotion = -headMotion * (M_PI / 180.0);
-    headMotion = fmod(headMotion + (M_PI_2), 2.0 * M_PI);
+    headMotion = -headMotion * (kPi / 180.0);
+    headMotion = std::fmod(headMotion + kHalfPi, 2.0 * kPi);
     while (headMotion < 0) {
-        headMotion += M_PI * 2.0;
+        headMotion += kPi * 2.0;
     }
 
     // There's no flag for that. Assume it's good
