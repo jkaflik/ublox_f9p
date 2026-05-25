@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
@@ -20,10 +22,12 @@ public:
 private:
     bool debug;
 
-    UBlox *ublox_;
+    std::unique_ptr<UBlox> ublox_;
 
     std::string frame_id_;
+    std::string child_frame_id_;
     std::string world_frame_id;
+    bool publish_motion_odometry_;
 
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr navsat_fix_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr motion_odom_publisher_;

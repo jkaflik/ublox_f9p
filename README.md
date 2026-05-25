@@ -28,12 +28,13 @@ The work is based on the [xbot_driver_gps](https://github.com/ClemensElflein/xbo
 ## Parameters
 
 - **/frame_id (string):** The frame id to use for the messages, defaults to "gps"
-- **/child_frame_id (string):** The child frame id to use for the messages, defaults to "gps_link"
+- **/child_frame_id (string):** The child frame id to use for `/gps/odom`, defaults to `/frame_id`
 - **/port (string):** The serial port to use, defaults to /dev/ttyACM0
 - **/baudrate (int):** The baudrate to use, defaults to 921600
-- **/config (bool):** Enable F9P configuration via `UBX-CFG-VALSET` message, defaults to false. Required to be set to true to make configuration options below work.
-  -  **/config.measurement_rate (uint16):** Nominal frequency between GNSS measurements, defaults to 5, maximum 40
+- **/config.enabled (bool):** Enable F9P configuration via `UBX-CFG-VALSET` message, defaults to false. Required to be set to true to make configuration options below work.
+  -  **/config.measurement_frequency (int):** Nominal GNSS measurement frequency in Hz, defaults to 5, maximum 40
   -  **/config.uart_output_rate (uint8):** Rate of UBX_NAV_PVT measurements to arrive at UART1, defaults to 5
+- **/publish.motion_odometry (bool):** Publish `/gps/odom` velocity/heading odometry, defaults to true
 
 ## Subscribed Topics:
 

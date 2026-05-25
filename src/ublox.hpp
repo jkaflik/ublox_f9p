@@ -5,6 +5,7 @@
 #include <memory>
 #include <chrono>
 #include <sstream>
+#include <cstdint>
 
 #include "ubx_datatypes.hpp"
 
@@ -34,12 +35,14 @@ public:
         };
 
         uint32_t sensor_time;
-        uint32_t received_time;
+        uint64_t received_time;
 
         // Position
         bool position_valid;
         // Position accuracy in m
         double position_accuracy;
+        double horizontal_accuracy;
+        double vertical_accuracy;
         double pos_e, pos_n, pos_u;
 
         // Pos in lat/lon for VRS
@@ -60,12 +63,13 @@ public:
 
         FixType fix_type;
         RTKType rtk_type;
+        bool differential_solution;
     };
 
     class ConfigSet {
     public:
         enum Key {
-            CFG_RATE_MEAS = 0x30210001, // uint16, seconds, scaled to 10ms
+            CFG_RATE_MEAS = 0x30210001, // uint16, measurement period in ms
             CFG_MSGOUT_UBX_NAV_PVT_UART1 = 0x20910007, // uint8, messages per second
         };
 
@@ -103,6 +107,8 @@ private:
     typedef std::function<void(const std::chrono::time_point<std::chrono::steady_clock>&, const UbxNavPvtConstPtr&)> NavPacketHandlerFunction;
 
     void navPacketHandler(const std::chrono::time_point<std::chrono::steady_clock>& time, const UbxNavPvtConstPtr& packet);
+
+    void log(const std::string& message, LogLevel level) const noexcept;
 
     // Pimpl - hide serial port members from class users
     class Serial;
