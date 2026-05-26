@@ -431,6 +431,8 @@ void UBlox::navPacketHandler(const std::chrono::time_point<std::chrono::steady_c
     gpsState.pos_lat = lat;
     gpsState.pos_lon = lon;
     gpsState.pos_altitude = altitude;
+    gpsState.num_satellites = packet->numSV;
+    gpsState.position_dop = static_cast<double>(packet->pDOP) * 0.01;
     gpsState.position_valid = true;
     gpsState.pos_e = easting;
     gpsState.pos_n = northing;

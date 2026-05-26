@@ -10,6 +10,7 @@ find_package(Boost REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
 
 find_package(geometry_msgs REQUIRED)
+find_package(gps_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(serial_driver REQUIRED)
@@ -39,6 +40,7 @@ target_link_libraries(ublox_f9p
 
 ament_target_dependencies(ublox_f9p
         geometry_msgs
+        gps_msgs
         rclcpp
         sensor_msgs
         serial_driver

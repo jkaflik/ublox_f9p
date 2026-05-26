@@ -47,6 +47,8 @@ public:
 
         // Pos in lat/lon for VRS
         double pos_lat, pos_lon, pos_altitude;
+        uint8_t num_satellites;
+        double position_dop;
 
         // Motion
         bool motion_heading_valid;
@@ -70,7 +72,8 @@ public:
     public:
         enum Key {
             CFG_RATE_MEAS = 0x30210001, // uint16, measurement period in ms
-            CFG_MSGOUT_UBX_NAV_PVT_UART1 = 0x20910007, // uint8, messages per second
+            CFG_RATE_NAV = 0x30210002, // uint16, measurements per navigation solution
+            CFG_MSGOUT_UBX_NAV_PVT_UART1 = 0x20910007, // uint8, output interval on UART1
         };
 
         void set(const uint32_t keyID, const uint16_t value);
