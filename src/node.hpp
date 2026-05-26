@@ -1,6 +1,9 @@
 #pragma once
 
+#include <memory>
+
 #include <rclcpp/rclcpp.hpp>
+#include <gps_msgs/msg/gps_fix.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <rtcm_msgs/msg/message.hpp>
@@ -20,12 +23,15 @@ public:
 private:
     bool debug;
 
-    UBlox *ublox_;
+    std::unique_ptr<UBlox> ublox_;
 
     std::string frame_id_;
+    std::string child_frame_id_;
     std::string world_frame_id;
+    bool publish_motion_odometry_;
 
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr navsat_fix_publisher_;
+    rclcpp::Publisher<gps_msgs::msg::GPSFix>::SharedPtr gps_fix_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr motion_odom_publisher_;
 
     rclcpp::Subscription<rtcm_msgs::msg::Message>::SharedPtr rtcm_subscriber_;
@@ -49,6 +55,8 @@ private:
 
 
     void publishNavSatFix(const UBlox::GPSState &state) const;
+
+    void publishGpsFix(const UBlox::GPSState &state) const;
 
     void publishMotionOdom(const UBlox::GPSState &state) const;
 };

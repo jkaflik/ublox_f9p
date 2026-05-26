@@ -14,6 +14,7 @@
   <depend>diagnostic_msgs</depend>
   <depend>diagnostic_updater</depend>
   <depend>geographiclib</depend>
+  <depend>gps_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
   <depend>rtcm_msgs</depend>

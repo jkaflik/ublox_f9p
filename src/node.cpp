@@ -1,7 +1,73 @@
 #include "node.hpp"
 
+#include <cmath>
+#include <memory>
+#include <stdexcept>
+
+#include <gps_msgs/msg/gps_status.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+namespace {
+constexpr double kPi = 3.14159265358979323846;
+
+bool hasGnssFix(const UBlox::GPSState &state) {
+    switch (state.fix_type) {
+        case UBlox::GPSState::FixType::FIX_2D:
+        case UBlox::GPSState::FixType::FIX_3D:
+        case UBlox::GPSState::FixType::GNSS_DR_COMBINED:
+            return true;
+        default:
+            return false;
+    }
+}
+
+int8_t navSatStatus(const UBlox::GPSState &state) {
+    if (!hasGnssFix(state)) {
+        return sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+    }
+    if (state.rtk_type == UBlox::GPSState::RTK_FIX) {
+        return sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
+    }
+    if (state.rtk_type == UBlox::GPSState::RTK_FLOAT || state.differential_solution) {
+        return sensor_msgs::msg::NavSatStatus::STATUS_SBAS_FIX;
+    }
+    return sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+}
+
+int16_t gpsFixStatus(const UBlox::GPSState &state) {
+    using GPSStatus = gps_msgs::msg::GPSStatus;
+    constexpr int16_t kStatusRtkFix = 19;
+    constexpr int16_t kStatusRtkFloat = 20;
+    if (!hasGnssFix(state)) {
+        return GPSStatus::STATUS_NO_FIX;
+    }
+    if (state.rtk_type == UBlox::GPSState::RTK_FIX) {
+        return kStatusRtkFix;
+    }
+    if (state.rtk_type == UBlox::GPSState::RTK_FLOAT) {
+        return kStatusRtkFloat;
+    }
+    if (state.differential_solution) {
+        return GPSStatus::STATUS_DGPS_FIX;
+    }
+    return GPSStatus::STATUS_FIX;
+}
+
+double enuYawToTrackDegrees(double east_velocity, double north_velocity) {
+    if (std::hypot(east_velocity, north_velocity) <= 0.0) {
+        return 0.0;
+    }
+    double track = std::atan2(east_velocity, north_velocity) * 180.0 / kPi;
+    while (track < 0.0) {
+        track += 360.0;
+    }
+    while (track >= 360.0) {
+        track -= 360.0;
+    }
+    return track;
+}
+}
 
 UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UBLOX_F9P_NODE_NAME, options) {
     debug = this->declare_parameter<bool>("debug", false);
@@ -14,9 +80,12 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
     }
 
     frame_id_ = this->declare_parameter("frame_id", "gps");
+    child_frame_id_ = this->declare_parameter("child_frame_id", frame_id_);
     world_frame_id = this->declare_parameter("world_frame", "map");
+    publish_motion_odometry_ = this->declare_parameter("publish.motion_odometry", true);
 
     navsat_fix_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
+    gps_fix_publisher_ = this->create_publisher<gps_msgs::msg::GPSFix>("gps/fix_extended", 10);
     motion_odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("gps/odom", 10);
 
     this->rtcm_subscriber_ = this->create_subscription<rtcm_msgs::msg::Message>("/rtcm", 10,
@@ -29,22 +98,46 @@ UbloxF9PNode::UbloxF9PNode(const rclcpp::NodeOptions &options) : rclcpp::Node(UB
 
     RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to " << port << " at " << baudrate << " baud");
 
-    ublox_ = new UBlox();
+    ublox_ = std::make_unique<UBlox>();
     ublox_->setLogCallback(
             std::bind(&UbloxF9PNode::gpsLogCallback, this, std::placeholders::_1, std::placeholders::_2));
     ublox_->setGPSStateCallback(std::bind(&UbloxF9PNode::gpsStateCallback, this, std::placeholders::_1));
     ublox_->connect(port, baudrate);
 
-    if (this->declare_parameter<bool>("config.enable", false) == true) {
-        uint16_t rate_meas = 1000 / this->declare_parameter<uint16_t>("config.measurement_rate", 5);
-        uint8_t nav_pvt_uart1 = this->declare_parameter<uint8_t>("config.uart_output_rate", 5);
+    if (this->declare_parameter<bool>("config.enabled", false) == true) {
+        int measurement_frequency = this->declare_parameter<int>("config.measurement_frequency", 5);
+        int uart_output_rate = this->declare_parameter<int>("config.uart_output_rate", measurement_frequency);
+
+        if (measurement_frequency <= 0 || measurement_frequency > 40) {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Invalid config.measurement_frequency: " << measurement_frequency);
+            throw std::runtime_error("Invalid config.measurement_frequency");
+        }
+        if (uart_output_rate < 0 || uart_output_rate > 255) {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Invalid config.uart_output_rate: " << uart_output_rate);
+            throw std::runtime_error("Invalid config.uart_output_rate");
+        }
+        if (uart_output_rate > measurement_frequency) {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "config.uart_output_rate cannot exceed config.measurement_frequency: "
+                    << uart_output_rate << " > " << measurement_frequency);
+            throw std::runtime_error("Invalid config.uart_output_rate");
+        }
+
+        uint16_t rate_meas = static_cast<uint16_t>(1000 / measurement_frequency);
+        uint16_t rate_nav = 1;
+        uint8_t nav_pvt_uart1 = 0;
+        if (uart_output_rate > 0) {
+            nav_pvt_uart1 = static_cast<uint8_t>(measurement_frequency / uart_output_rate);
+        }
 
         UBlox::ConfigSet set;
         set.set(UBlox::ConfigSet::Key::CFG_RATE_MEAS, rate_meas);
+        set.set(UBlox::ConfigSet::Key::CFG_RATE_NAV, rate_nav);
         set.set(UBlox::ConfigSet::Key::CFG_MSGOUT_UBX_NAV_PVT_UART1, nav_pvt_uart1);
         ublox_->setConfig(set);
 
-        RCLCPP_INFO_STREAM(this->get_logger(), "Configured UBlox F9P with measurement rate " << rate_meas << "ms and UART1 output rate " << nav_pvt_uart1 << "Hz");
+        RCLCPP_INFO_STREAM(this->get_logger(), "Configured UBlox F9P with measurement period " << rate_meas
+                << "ms, navigation rate " << rate_nav << ", and UART1 NAV-PVT output interval "
+                << static_cast<int>(nav_pvt_uart1) << " (target " << uart_output_rate << "Hz)");
     }
 }
 
@@ -70,6 +163,7 @@ void UbloxF9PNode::gpsLogCallback(const std::string &msg, UBlox::LogLevel level)
 
 void UbloxF9PNode::gpsStateCallback(const UBlox::GPSState &state) {
     publishNavSatFix(state);
+    publishGpsFix(state);
     publishMotionOdom(state);
 
     gpsLogCallback("published valid GPS state", UBlox::LogLevel::DEBUG);
@@ -83,63 +177,108 @@ void UbloxF9PNode::publishNavSatFix(const UBlox::GPSState &state) const {
     msg.longitude = state.pos_lon;
     msg.altitude = state.pos_altitude;
     msg.position_covariance = {
-            pow(state.position_accuracy, 2), 0.0, 0.0,
-            0.0, pow(state.position_accuracy, 2), 0.0,
-            0.0, 0.0, pow(state.position_accuracy, 2)
+            pow(state.horizontal_accuracy, 2), 0.0, 0.0,
+            0.0, pow(state.horizontal_accuracy, 2), 0.0,
+            0.0, 0.0, pow(state.vertical_accuracy, 2)
     };
     msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
     msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
 
-    switch (state.fix_type) {
-        case UBlox::GPSState::FixType::FIX_2D:
-        case UBlox::GPSState::FixType::FIX_3D:
-            msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
-            break;
-        default:
-            msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
-            break;
-    }
+    msg.status.status = navSatStatus(state);
 
     navsat_fix_publisher_->publish(msg);
 }
 
+void UbloxF9PNode::publishGpsFix(const UBlox::GPSState &state) const {
+    gps_msgs::msg::GPSFix msg;
+    msg.header.stamp = this->now();
+    msg.header.frame_id = frame_id_;
+    msg.status.header = msg.header;
+    msg.status.status = gpsFixStatus(state);
+    msg.status.position_source = hasGnssFix(state)
+            ? gps_msgs::msg::GPSStatus::SOURCE_GPS
+            : gps_msgs::msg::GPSStatus::SOURCE_NONE;
+    msg.status.motion_source = hasGnssFix(state)
+            ? gps_msgs::msg::GPSStatus::SOURCE_DOPPLER
+            : gps_msgs::msg::GPSStatus::SOURCE_NONE;
+    msg.status.orientation_source = gps_msgs::msg::GPSStatus::SOURCE_NONE;
+    msg.status.satellites_used = state.num_satellites;
+
+    msg.latitude = state.pos_lat;
+    msg.longitude = state.pos_lon;
+    msg.altitude = state.pos_altitude;
+    msg.track = enuYawToTrackDegrees(state.vel_e, state.vel_n);
+    msg.speed = std::hypot(state.vel_e, state.vel_n);
+    msg.climb = state.vel_u;
+    msg.pdop = state.position_dop;
+    msg.err_horz = 1.96 * state.horizontal_accuracy;
+    msg.err_vert = 1.96 * state.vertical_accuracy;
+    msg.err = 1.96 * state.position_accuracy;
+    msg.err_speed = state.vel_accuracy;
+    msg.err_track = state.motion_heading_accuracy * 180.0 / kPi;
+    msg.position_covariance = {
+            pow(state.horizontal_accuracy, 2), 0.0, 0.0,
+            0.0, pow(state.horizontal_accuracy, 2), 0.0,
+            0.0, 0.0, pow(state.vertical_accuracy, 2)
+    };
+    msg.position_covariance_type = gps_msgs::msg::GPSFix::COVARIANCE_TYPE_KNOWN;
+
+    gps_fix_publisher_->publish(msg);
+}
+
 void UbloxF9PNode::publishMotionOdom(const UBlox::GPSState &state) const {
-    double heading = state.vehicle_heading_valid ? state.vehicle_heading : state.motion_heading;
-    double headingAcc = state.vehicle_heading_valid ? state.vehicle_heading_accuracy : state.motion_heading_accuracy;
+    if (!publish_motion_odometry_) {
+        return;
+    }
+
+    const bool has_heading = state.vehicle_heading_valid || state.motion_heading_valid;
+    double heading = 0.0;
+    double headingAcc = kPi;
+
+    if (state.vehicle_heading_valid) {
+        heading = state.vehicle_heading;
+        headingAcc = state.vehicle_heading_accuracy;
+    } else if (state.motion_heading_valid) {
+        heading = state.motion_heading;
+        headingAcc = state.motion_heading_accuracy;
+    }
 
     auto covSpeed = pow(state.vel_accuracy, 2);
+    constexpr double kUnknownPoseVariance = 1.0e6;
 
     nav_msgs::msg::Odometry msg;
     msg.header.stamp = now();
     msg.header.frame_id = world_frame_id;
-    msg.child_frame_id = frame_id_;
+    msg.child_frame_id = child_frame_id_;
     msg.twist.twist.linear.x = state.vel_e;
     msg.twist.twist.linear.y = state.vel_n;
     msg.twist.twist.linear.z = state.vel_u;
     msg.twist.covariance[0] = covSpeed;
     msg.twist.covariance[7] = covSpeed;
     msg.twist.covariance[14] = covSpeed;
-    msg.twist.covariance[35] = -1;
+    msg.twist.covariance[35] = 1.0e6;
 
     msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(0, 0, 1), heading));
     msg.pose.covariance = {
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, pow(headingAcc, 2),
+            kUnknownPoseVariance, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, kUnknownPoseVariance, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, kUnknownPoseVariance, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, kUnknownPoseVariance, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, kUnknownPoseVariance, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, has_heading ? pow(headingAcc, 2) : kUnknownPoseVariance,
     };
 
     motion_odom_publisher_->publish(msg);
 }
 
 void UbloxF9PNode::rtcmCallback(const rtcm_msgs::msg::Message::SharedPtr msg) {
-    std::vector<uint8_t> data(&msg->message.data()[0], &msg->message.data()[msg->message.size()]);
+    if (msg->message.empty()) {
+        return;
+    }
+
+    std::vector<uint8_t> data(msg->message.begin(), msg->message.end());
 
     ublox_->sendRTCM(data);
 }
 
-UbloxF9PNode::~UbloxF9PNode() {
-    delete ublox_;
-}
+UbloxF9PNode::~UbloxF9PNode() = default;
